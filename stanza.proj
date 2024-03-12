@@ -1,0 +1,15 @@
+include? ".slm/stanza.proj"
+pkg-cache: ".slm/pkg-cache"
+packages * defined-in "src/"
+
+build main :
+  inputs:
+    lang-utils
+  pkg: ".slm/pkgs"
+
+build-test lang-utils-tests :
+  inputs:
+    lang-utils/tests
+  pkg: ".slm/test-pkgs"
+  o: "lang-utils-tests"
+

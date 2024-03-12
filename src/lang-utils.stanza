@@ -1,0 +1,794 @@
+defpackage lang-utils :
+  import core
+  import collections
+  import utils/file-system
+  import core/parsed-path
+
+;============================================================
+;====================== Grouping ============================
+;============================================================
+
+public defn group-by<?T,?K,?V> (xkey:T -> ?K&Hashable&Equalable, xval:T -> ?V, xs:Seqable<?T>) :
+  val table = HashTable<K,List<V>>(List())
+  for x in xs do :
+    update(table, cons{xval(x), _}, xkey(x))
+  table
+
+public defn group-by<?T,?K> (xkey:T -> ?K&Hashable&Equalable, xs:Seqable<?T>) :
+  group-by(xkey, {_}, xs)
+
+;============================================================
+;==================== Memoization ===========================
+;============================================================
+
+public defn memoize<T,?S> (f: T -> ?S) :
+  val table = HashTable<T,S>()
+  fn (key:T) -> S :
+    if not key?(table,key) :
+      table[key] = f(key)
+    table[key]
+
+#for (Ts in splice([(T1) (T1 T2) (T1 T2 T3)])
+      xs in splice([(x1) (x1 x2) (x1 x2 x3)])
+      args in splice([(x1:T1) (x1:T1 x2:T2) (x1:T1 x2:T2 x3:T3)])) :
+  public defn memoize<Ts,?K,?S> (key:(Ts) -> ?K, f: (Ts) -> ?S) :
+    val table = HashTable<K,S>()
+    fn (args) -> S :
+      val key = key(xs)
+      if not key?(table,key) :
+        table[key] = f(xs)
+      table[key]
+
+;============================================================
+;=================== Collection Utilities ===================
+;============================================================
+
+; Get an arbitrary element from a non-empty Collection
+public defmulti get-one<?T> (xs: Collection<?T>) -> T
+
+defmethod get-one<?T> (xs: Set<?T>) -> T :
+  next(to-seq(xs))
+
+;============================================================
+;================= Set Utilities ==========================
+;============================================================
+
+public defn to-intset<?V> (key:V -> Int, values:Seqable<?V>) -> IntSet :
+  to-intset $ seq(key, values)
+
+public defn to-hashset<?K,?V> (key:V -> ?K, values:Seqable<?V>) -> HashSet<K> :
+  to-hashset<K> $ seq(key, values)
+
+public defn to-hashset<?K> (s: Seqable<?K>) -> HashSet<K>:
+  to-hashset<K>(s)
+
+; Pop an arbitrary element if the Set is not empty, return false otherwise
+public defn pop?<?T> (xs: Set<?T>) -> T|False :
+  if not empty?(xs) :
+    pop(xs)
+
+; Pop an arbitrary element from a non-empty Set
+public defn pop<?T> (xs: Set<?T>) -> T :
+  val ret = get-one(xs)
+  remove(xs, ret)
+  ret
+
+;============================================================
+;================= Table Utilities ==========================
+;============================================================
+
+public defn to-inttable<?V> (key:V -> Int, values:Seqable<?V>) -> IntTable<V> :
+  to-inttable<V> $
+    for v in values seq :
+      key(v) => v
+
+public defn to-inttable<?V,?S> (key:V -> Int, value:V -> ?S, values:Seqable<?V>) -> IntTable<S> :
+  to-inttable<S> $
+    for v in values seq :
+      key(v) => value(v)
+
+public defn to-inttable<?V> (s: Seqable<KeyValue<Int, ?V>>) -> IntTable<V> :
+  to-inttable<V>(s)
+
+public defn to-hashtable<?K,?V> (key:V -> ?K, values:Seqable<?V>) -> HashTable<K,V> :
+  to-hashtable<K,V> $
+    for v in values seq :
+      key(v) => v
+
+public defn to-hashtable<?K,?V,?S> (key:V -> ?K, value:V -> ?S, values:Seqable<?V>) -> HashTable<K,S> :
+  to-hashtable<K,S> $
+    for v in values seq :
+      key(v) => value(v)
+
+public defn to-hashtable<?K, ?V> (s: Seqable<KeyValue<?K, ?V>>) -> HashTable<K, V> :
+  to-hashtable<K, V>(s)
+
+doc: \<>Transform a sequence of key-value pairs into a hashtable mapping keys to a
+tuple of values, merging values with the same key.<>
+public defn to-hashtable-merging-same-keys<?K, ?V> (s: Seqable<KeyValue<?K, ?V>>) -> HashTable<K, Tuple<V>>:
+  val table = HashTable<K, Vector<V>>()
+  for [key, value] in kvs(s) do:
+    table
+      $> get-or-insert{_, key, Vector<V>()}
+      $> add{_, value}
+  to-hashtable $ for [key, value] in kvs(table) seq:
+    key => to-tuple(value)
+
+public defn get-or-insert<?K, ?V> (table: HashTable<?K, ?V>, key: K, default: V) -> V:
+  if not key?(table, key): table[key] = default
+  table[key]
+
+;============================================================
+;==================== Sequence Utilities ====================
+;============================================================
+
+public defn next?<?T> (seq:Seq<?T>) -> T|False :
+  next(seq) when not empty?(seq)
+
+public defn filter-nones<?T> (s:Seqable<?T|None>) -> Seq<T> :
+  filter({not (_ is None)}, s) as Seq<T>
+
+public defn reversed<?T> (t:Tuple<?T>) -> Tuple<T> :
+  val n = length(t)
+  to-tuple $ seq({t[n - _]}, 1 through n)
+
+public defn swap<?T, ?S> (tup:[?T, ?S]) -> [S, T] :
+  [tup[1] as S, tup[0] as T]
+
+;============================================================
+;=================== Comparison Utilities ===================
+;============================================================
+
+;A convenience function for comparing two objects 'a' and 'b'
+;given an ordered sequence of comparisons 'funcs'.
+;'funcs' is a Seqable of KeyValues where:
+;- the key is an accessor of 'a' and 'b'.
+;- the value is a comparison function for the accessed field.
+;<compare>
+defstruct IndexedPoint <: Comparable :
+  i:Int
+  point:Point
+
+defn compare-point (p:Point, q:Point) :
+  compare(p, q, [x => compare, y => compare])
+
+defmethod compare (p:IndexedPoint, q:IndexedPoint) :
+  compare(p, q, [i => compare, point => compare-point])
+;<compare>
+public defn compare<?T> (a:?T, b:?T, funcs:Seqable<KeyValue<(T -> ?), ((?, ?) -> Int)>>) -> Int :
+  label<Int> return :
+    for [func, comp] in kvs(funcs) do :
+      val compare-value = comp(func(a), func(b))
+      return(compare-value) when compare-value != 0
+    0
+
+;============================================================
+;==================== Vectors ===============================
+;============================================================
+
+public defn remove-duplicates! (xs:Vector<Equalable>) :
+  if not empty?(xs) :
+    let loop (n:Int = 1, i:Int = 1) :
+      if i < length(xs) :
+        if xs[i] == xs[n - 1] :
+          loop(n, i + 1)
+        else :
+          xs[n] = xs[i]
+          loop(n + 1, i + 1)
+      else :
+        shorten(xs, n)
+
+public defn remove-duplicate-values! (xs:Vector<Equalable>) :
+  val visited = HashSet<?>()
+  for x in xs remove-when :
+    not add(visited, x)
+
+;============================================================
+;===================== Key Values ===========================
+;============================================================
+
+public defn kvs<?K,?V> (xs:Seqable<KeyValue<?K,?V>>) :
+  for x in xs seq : [key(x), value(x)]
+
+public defn ckvs<?K,?V> (xs:Collection<KeyValue<?K,?V>>) :
+  new Collection<[K, V]> :
+    defmethod to-seq (this) :
+      for x in xs seq : [key(x), value(x)]
+
+public defn kv<?K,?V> (x:KeyValue<?K,?V>) :
+  [key(x), value(x)]
+
+;============================================================
+;===================== Destructuring ========================
+;============================================================
+
+; Map a fixed number of arguments to a tuple of fixed size
+; These allows destructuring the result
+; Map 2 arguments to tuple with exact types
+public defn map*<?T,?R> (f:(T -> ?R), args:[?T, T]) -> [R, R] :
+  [f(args[0]), f(args[1])]
+
+; Map 3 arguments to tuple with exact types
+public defn map*<?T,?R> (f:(T -> ?R), args:[?T, T, T]) -> [R, R, R] :
+  [f(args[0]), f(args[1]), f(args[2])]
+
+; Map 4 arguments to tuple with exact types
+public defn map*<?T,?R> (f:(T -> ?R), args:[?T, T, T, T]) -> [R, R, R, R] :
+  [f(args[0]), f(args[1]), f(args[2]), f(args[3])]
+
+; Map KeyValue pair
+public defn map*<?T,?R> (f:(T -> ?R), kv:KeyValue<?T,?T>) -> KeyValue<R,R> :
+  f(key(kv)) => f(value(kv))
+
+; Nested map for pair of KeyValues
+public defn map**<?T, ?R> (f:(T -> ?R), kv:[KeyValue<?T,?T>, KeyValue<?T,?T>]) -> [KeyValue<R, R> KeyValue<R, R>] :
+  map*(map*{f, _}, kv)
+
+; Can implement versions for more arguments as needed
+
+; Call a function with each argument from a tuple
+; 2 argument version
+public defn apply<?T0, ?T1, ?R> (f: (T0, T1) -> ?R, args:[?T0, ?T1]) -> R :
+  val [a0, a1] = args
+  f(a0, a1)
+; 3 argument version
+public defn apply<?T0, ?T1, ?T2, ?R> (f: (T0, T1, T2) -> ?R, args:[?T0, ?T1, ?T2]) -> R :
+  val [a0, a1, a2] = args
+  f(a0, a1, a2)
+
+
+;============================================================
+;==================== Small Sets ============================
+;============================================================
+
+public defn set-equal?<?T> (xs:Collection<?T&Equalable&Comparable>, ys:Collection<T&Equalable&Comparable>) :
+  val sorted-xs = qsort(xs)
+  val sorted-ys = qsort(ys)
+  length(sorted-xs) == length(sorted-ys) and
+  all?(equal?, sorted-xs, sorted-ys)
+
+public defn set-subset?<?T> (xs:Collection<?T&Equalable>, ys:Collection<T&Equalable>) :
+  for x in xs all? :
+    contains?(ys, x)
+
+;============================================================
+;===================== Walkers ==============================
+;============================================================
+
+public defn ring-pairs<?T> (xs0:Seqable<?T>) -> Seq<[T,T]> :
+  val xs = to-peek-seq(xs0)
+  generate<[T,T]> :
+    val x0 = next(xs)
+    let loop (x:T = x0) :
+      if empty?(xs) :
+        yield([x, x0])
+      else :
+        yield([x, peek(xs)])
+        loop(next(xs))
+
+public defn path-pairs<?T> (xs0:Seqable<?T>) -> Seq<[T,T]> :
+  val xs = to-peek-seq(xs0)
+  generate<[T,T]> :
+    if not empty?(xs) :
+      let loop (x:T = next(xs)) :
+        if not empty?(xs) :
+          yield([x, peek(xs)])
+          loop(next(xs))
+
+;============================================================
+;====================== Identifiers =========================
+;============================================================
+; "/" is theoretically valid but in practice can't be used as the variable is then wrongly interpreted as fully qualified
+val LEGAL-SPECIAL-IDENT-CHARS = "~!@#$%^*+-=_?"
+val LEGAL-DIGIT-IDENT-CHARS = "0123456789"
+val LEGAL-ALPHABETICAL-IDENT-CHARS = "abcdefghijklmnopqrstuvwxyz"
+val LEGAL-UPPERCASE-ALPHABETICAL-IDENT-CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+val LEGAL-IDENT-CHARS = to-hashset<Char> $ append-all([LEGAL-SPECIAL-IDENT-CHARS,
+                                                       LEGAL-DIGIT-IDENT-CHARS,
+                                                       LEGAL-ALPHABETICAL-IDENT-CHARS,
+                                                       LEGAL-UPPERCASE-ALPHABETICAL-IDENT-CHARS])
+
+public defn identifier-char? (c:Char) -> True|False :
+  LEGAL-IDENT-CHARS[c]
+
+;============================================================
+;================ Hexadecimal Conversion ====================
+;============================================================
+val HEX-CHARS = ['0' '1' '2' '3' '4' '5' '6' '7' '8' '9'
+                 'A' 'B' 'C' 'D' 'E' 'F']
+public defn hex (b:Byte) :
+  val c1 = HEX-CHARS[to-int(b) >> 4]
+  val c2 = HEX-CHARS[to-int(b) & 0xF]
+  String([c1, c2])
+public defn hexint (c:Char) :
+  if c >= '0' and c <= '9' :
+    to-int(c) - to-int('0')
+  else if c >= 'A' and c <= 'F' :
+    10 + to-int(c) - to-int('A')
+  else :
+    fatal("Invalid hexadecimal character: %_" % [c])
+public defn hexint (c1:Char, c2:Char) :
+  hexint(c1) << 4 + hexint(c2)
+public defn hexchar (c1:Char, c2:Char) :
+  to-char(hexint(c1, c2))
+
+;============================================================
+;==================== Comparison ============================
+;============================================================
+
+public defn all-equal? (xs0:Seqable<Equalable>) -> True|False :
+  val xs = to-seq(xs0)
+  if empty?(xs) :
+    true
+  else :
+    val x0 = next(xs)
+    all?({x0 == _}, xs)
+
+public defn min-max<?V0, ?V1> (x:?V1&Comparable<?V0>, y:V0) -> [V0|V1, V0|V1] :
+  [min(x, y), max(x, y)]
+
+;============================================================
+;============= Permutations and Combinations ================
+;============================================================
+
+public defn choose (n:Int, k:Int) -> Long :
+  let loop (n:Long = to-long(n), k:Long = to-long(k)) :
+    if k == 0L : 1L
+    else : loop(n - 1L, k - 1L) * n / k
+
+;============================================================
+;=================== Template Replacement ===================
+;============================================================
+
+public defn replace-template (template:String, entries:Tuple<KeyValue<String,?>>) :
+  ;Convert entries into table
+  val entry-table = to-hashtable<String,?>(entries)
+
+  ;Find the next splicing index
+  defn* next-splice (begin:Int) -> SplicePoint|False :
+    val start = index-of-char(template, begin to false, '{')
+    match(start:Int) :
+      val end = index-of-char(template, start to false, '}')
+      match(end:Int) :
+        val key = template[(start + 1) to end]
+        if key?(entry-table, key) : SplicePoint(start, end, entry-table[key])
+        else : next-splice(start + 1)
+
+  ;Return printable thing
+  new Printable :
+    defmethod print (o:OutputStream, this) :
+      let loop (i:Int = 0) :
+        match(next-splice(i)) :
+          (s:SplicePoint) :
+            print(o, template[i to start(s)])
+            print(o, value(s))
+            loop(end(s) + 1)
+          (s:False) :
+            print(o, template[i to false])
+
+defstruct SplicePoint :
+  start: Int ;The index of the { character
+  end: Int   ;The index of the } character
+  value
+
+;============================================================
+;================== Equal Method Helpers ====================
+;============================================================
+;Returns whether the given fields of `a` and `b` are equal.
+public defn equal?<?T> (a:?T&Equalable, b:?T&Equalable, fields:Seqable<(T -> Equalable)>) -> True|False :
+  all?({_0(a) == _0(b)}, fields)
+
+;============================================================
+;================= Convenient Parts Equal ===================
+;============================================================
+public deftype PartsEqual <: Hashable & Equalable
+public defmulti parts (p:PartsEqual) -> Tuple
+defmethod hash (a:PartsEqual) : hash(parts(a))
+defmethod equal? (a:PartsEqual, b:PartsEqual) : parts(a) == parts(b)
+
+;============================================================
+;===================== ID Generator =========================
+;============================================================
+
+public deftype IdGen
+public defmulti next (g:IdGen) -> Int
+
+public defn IdGen (ids:Seqable<Int>) :
+  val used-ids = to-intset(ids)
+  val counter = to-seq(0 to false)
+  new IdGen :
+    defmethod next (this) :
+      let loop () :
+        val i = next(counter)
+        if used-ids[i] : loop()
+        else : i
+
+;============================================================
+;===================== Either Maps ==========================
+;============================================================
+; Returns f(x) if x is not false, or false otherwise. The return type is inferred.
+public defn call?<?T,?S> (f:(T) -> ?S, x:?T|False) -> S|False :
+  f(x as T) when x is-not False
+
+public defn call?<?T,?S,?R> (f:(T) -> ?S, x:?T|False, default:?R) -> S|R :
+  default when x is False else f(x as T)
+
+; Returns f(x) if x is not false, or false otherwise.
+public defn call?<T,?S> (f:T -> ?S, x:T|False) -> S|False :
+  call?<T>(f, x, false)
+
+; Returns f(x) if x is not false, otherwise returns default.
+public defn call?<T,?S,?R> (f:T -> ?S, x:T|False, default:?R) -> S|R :
+  match(x) :
+    (x:False) : default
+    (x:T) : f(x)
+
+public defn call-if-false?<T,?S> (f: () -> ?S, x:T|False) -> T|S:
+  match(x):
+    (x:False): f()
+    (x:T) : x
+
+public defn call-if-false?<?T> (f: () -> ?T, x:?T|False) -> T :
+  if x is False :
+    f()
+  else :
+    x as T
+
+public defn if-false?<T,?S> (s:?S, x:T|False):
+  call-if-false?<T>(fn (): s, x)
+
+public defn if-false?<?T> (value:?T, x:?T|False) -> T :
+  value when x is False else (x as T)
+
+public defn call-if-empty?<T,?S> (f: () -> ?S, x:Maybe<T>) -> T|S :
+  if empty?(x) :
+    f()
+  else :
+    value!(x)
+
+public defn call-if-empty?<?T> (f: () -> ?T, x:Maybe<?T>) -> T :
+  if empty?(x) :
+    f()
+  else :
+    value!(x)
+
+public defn if-empty?<T,?S> (s:?S, x:Maybe<T>) :
+  call-if-empty?<T>(fn (): s, x)
+
+public defn if-empty?<?T> (value:?T, x:Maybe<?T>) -> T :
+  value when empty?(x) else value!(x)
+
+public defn call?<?T, ?U> (func: (T) -> ?U, x:Maybe<?T>) -> Maybe<U> :
+  One(func(value(x as One<T>))) when x is One else None()
+
+;============================================================
+;==================== Boxed Strings =========================
+;============================================================
+public extern defn jitx_boxed_string (len:int, chars:ptr<byte>) -> int:
+  return box-object(String(len, chars))
+
+public lostanza defn take-boxed-string (boxid:int) -> ref<String>:
+  val obj = boxed-object(boxid)
+  free-box(boxid)
+  return obj
+
+;============================================================
+;===================== ByteVector ===========================
+;============================================================
+public lostanza deftype ByteVector :
+  var array: ref<ByteArray>
+  var length: long
+
+extern memcpy: (ptr<?>, ptr<?>, long) -> ptr<?>
+public lostanza defn add-data (a:ref<ByteVector>, data:ptr<byte>, nbytes:long) -> int :
+  ensure-capacity(a, nbytes + a.length)
+  call-c memcpy(addr!(a.array.data[a.length]), data, nbytes)
+  a.length = a.length + nbytes
+  return 0
+
+public lostanza defn ensure-capacity (a:ref<ByteVector>, capacity:long) -> int :
+  if a.array.length < capacity :
+    ;Compute new length of array
+    var new-length:long = a.array.length
+    while new-length < capacity :
+      new-length = new-length * 2L
+    ;Copy over contents to new array
+    val array* = ByteArray(new Int{new-length as int})
+    call-c memcpy(addr!(array*.data), addr!(a.array.data), a.array.length)
+    ;Set new array as backing array of buffer
+    a.array = array*
+  return 0
+
+;============================================================
+;===================== Debug utils ==========================
+;============================================================
+
+; Print that breaks the JITX CI if left in the code
+public defn println! (x) :
+  println(x)
+
+;============================================================
+;================== Stream utilities ========================
+;============================================================
+
+public defn read-line (input:InputStream) -> String :
+  val buf = StringBuffer()
+  let loop () :
+    val c = get-char(input)
+    match(c:Char) :
+      if c != '\n' :
+        add(buf, c)
+        loop()
+  to-string(buf)
+
+public defn output-stream (body : () -> ?, os:OutputStream) :
+  with-output-stream(os, body)
+
+doc: \<> Assert that the given condition is true, otherwise fatal with the
+given message, e.g:
+```
+   assert(1 is-not String, "something horrible has happened")
+```
+<>
+public defn assert (x: True|False, msg: String|Printable) -> Void|False:
+  if not x:
+    fatal("assertion failed: %_" % [msg])
+
+doc: \<> Given a tuple of pairs, return a pair of tuples corresponding to the first and second pairs. The logical dual to `zip(xs, ys)` (i.e. `unzip(to-tuple(zip(xs, ys))) == [xs, ys]`). e.g:
+```
+  [[1, "foo"], [2, "bar"]] $> unzip == [[1, 2], ["foo", "bar"]]
+```
+<>
+public defn unzip<?T, ?U> (s: Tuple<[?T, ?U]>) -> [Tuple<T>, Tuple<U>]:
+  [ts, us]
+where:
+  val ts = map(fn ([t, _]): t, s)
+  val us = map(fn ([_, u]): u, s)
+
+public defn unzip<?T, ?U, ?V> (s: Tuple<[?T, ?U, ?V]>) -> [Tuple<T>, Tuple<U>, Tuple<V>]:
+  [ts, us, vs]
+where:
+  val ts = map(fn ([t, u, v]): t, s)
+  val us = map(fn ([t, u, v]): u, s)
+  val vs = map(fn ([t, u, v]): v, s)
+
+
+public defn unzip-cat<?T, ?U> (s: Tuple<[Seqable<?T>, Seqable<?U>]>) -> [Tuple<T>, Tuple<U>]:
+  [ts, us]
+where:
+  val ts = to-tuple $ seq-cat(fn ([t, _]): t, s)
+  val us = to-tuple $ seq-cat(fn ([_, u]): u, s)
+
+
+public defn unzip-cat<?T, ?U, ?V> (s: Tuple<[Seqable<?T>, Seqable<?U>, Seqable<?V>]>) -> [Tuple<T>, Tuple<U>, Tuple<V>]:
+  [ts, us, vs]
+where:
+  val ts = to-tuple $ seq-cat(fn ([t, u, v]): t, s)
+  val us = to-tuple $ seq-cat(fn ([t, u, v]): u, s)
+  val vs = to-tuple $ seq-cat(fn ([t, u, v]): v, s)
+
+;============================================================
+;==================== File utilities ========================
+;============================================================
+doc:"Call body() inside of a different working direcrtory, `wd`."
+public defn working-dir<?T> (body: () -> ?T, wd:String) -> T :
+  val old-wd = get-cwd()
+  try :
+    ch-dir(wd)
+    body()
+  finally :
+    ch-dir(old-wd)
+
+
+public defn file-input-stream<?T> (body: (FileInputStream) -> ?T, path: String) -> T :
+  val istream = FileInputStream(path)
+  try :
+    body(istream)
+  finally :
+    close(istream)
+
+public defn read-lines (input:InputStream) -> Seq<String> :
+  generate<String> :
+    let read-line () :
+      val buffer = StringBuffer(120)
+
+      defn yield-buffer () :
+        yield $ to-string(buffer)
+        clear(buffer)
+
+      var last-char-is-backslash-r? = false
+      let read-char () :
+        match(get-char(input)) :
+          (c:Char) :
+            if c != '\n' and last-char-is-backslash-r? :
+              add(buffer, '\r')
+            last-char-is-backslash-r? = (c == '\r')
+            switch(c) :
+              '\n' :
+                yield-buffer()
+                read-line()
+              '\r' :
+                read-char()
+              else :
+                add(buffer, c)
+                read-char()
+          (c:False) :
+            yield-buffer()
+
+; todo: thread through deployment current-platform
+public defn absolute-path? (path:String) -> True|False :
+  path
+    $> parse-path{_, CURRENT-PLATFORM}
+    $> absolute?
+
+; todo: thread through deployment current-platform
+public defn parent-directory? (path:String) -> False|String :
+  path
+    $> parse-path
+    $> enclosing-dir
+    $> format{_, CURRENT-PLATFORM}
+    $> to-string
+
+;============================================================
+;==================== Maybe utilities =======================
+;============================================================
+doc: \<> Convert a `T|False` value to its corresponding `Maybe<T>` value, e.g:
+```
+  val tuple = [1]
+  get?(tuple, 0) $> false? == One(1)
+  get?(tuple, 1) $> false? == None()
+```
+<>
+public defn false?<?T> (v?: ?T|False) -> Maybe<T>:
+  match(v?):
+    (_: False): None()
+    (v: T): One(v)
+
+
+doc: \<> Map the value in `v?` using `f`, if one exists. Otherwise, return `None()`.
+e.g:
+```
+  defn add-one (v): v + 1
+  One(1) $> map{_, add-one} == One(2)
+  None() $> map{_, add-one} == None()
+```
+<>
+public defn map<?T, ?R> (v?: Maybe<?T>, f: T -> ?R) -> Maybe<R>:
+  match(v?):
+    (v: One): One(f(value!(v)))
+    (_: None): None()
+
+doc: \<> Map the value in `v?` using `f`, if one exists, flattening the result.
+Otherwise, return `None()`. e.g:
+```
+  defn reciprocal? (v): One(1./v) when v != 0.0 else None()
+  One(1.0) $> flat-map{_, reciprocal?} == One(1.0)
+  One(0.0) $> flat-map{_, reciprocal?} == None()
+  None()   $> flat-map{_, reciprocal?} == None()
+```
+<>
+public defn flat-map<?T, ?R> (v?: Maybe<?T>, f: T -> Maybe<?R>) -> Maybe<R>:
+  match(v?):
+    (v: One): f(value!(v))
+    (_: None): None()
+
+;============================================================
+;==================== String utilities ======================
+;============================================================
+
+doc: \<> Strip the given suffix off the given string. If the given suffix is not present, the string is returned unchanged. e.g:
+```
+  strip-suffix("foobar", "bar") == "foo"
+  strip-suffix("foobar", "xyz") == "foobar"
+```
+<>
+public defn strip-suffix (s: String, suffix: String) -> String:
+  if suffix?(s, suffix):
+    s[0 to length(s) - length(suffix)]
+  else:
+    s
+
+doc: "Utility to split a string separated by whitespace."
+public defn split-whitespace (s:String) -> Seq<String> :
+  val whitespace = "\r\n\t "
+  generate<String> :
+    val buf = StringBuffer(length(s))
+    val chars = to-seq(s)
+    let loop () :
+      if not empty?(chars) :
+        val ch = next(chars)
+        if contains?(whitespace, ch) :
+          yield(to-string(buf)) when not empty?(buf)
+          clear(buf)
+        else :
+          add(buf, ch)
+        loop()
+    yield(to-string(buf)) when not empty?(buf)
+
+public defn plus (s:String, t:String) -> String :
+  append(s, t)
+
+;============================================================
+;===================== Timing Utilities =====================
+;============================================================
+doc: \<> Time how long it takes to run body. Returns the time in milliseconds and the output of body(). e.g:
+```
+  val [ms, sum] =
+    within time-ms() :
+      reduce(plus, 0 to 12345)
+```
+<>
+public defn time-ms<?T> (body:() -> ?T) -> [Long, T] :
+  val t0 = current-time-ms()
+  val result = body()
+  val t1 = current-time-ms()
+  [t1 - t0, result]
+
+doc: \<> Time how long it takes to run body. Returns the time in milliseconds and the output of body(). e.g:
+```
+  val [ms, sum] =
+    within time-us() :
+      reduce(plus, 0 to 12345)
+```
+<>
+public defn time-us<?T> (body:() -> ?T) -> [Long, T] :
+  val t0 = current-time-us()
+  val result = body()
+  val t1 = current-time-us()
+  [t1 - t0, result]
+
+;============================================================
+;===================== Print Shorthands =====================
+;============================================================
+doc: \<> Print a new line. e.g:
+```
+  println()
+```
+<>
+public defn println () :
+  println("")
+
+doc: \<>Small utility to inspect intermediate values, e.g:
+```
+  defn some-calculation (): 1
+  ; print the value of `some-calculation()` before conversion to string.
+  val foo-bar = #DBG(some-calculation()) $> to-string
+```<>
+public defn #DBG<?T> (v: ?T) -> T:
+  println("[DEBUG]: %_" % [v])
+  v
+
+
+;============================================================
+;===================== Misc =====================
+;============================================================
+
+; Get vertices in a canonical order
+public defn ordered<?T> (v:[?T & Comparable, ?T & Comparable]) -> [T, T] :
+  val [v0, v1] = v
+  if v0 <= v1:
+    v
+  else:
+    [v1, v0]
+
+public defn ensure-single!<?T> (xs: Tuple<?T>) -> T :
+  if length(xs) != 1 :
+    throw $ Exception("Tuple was expected to contain 1 element but contained %_ : %~" % [length(xs), xs])
+
+  xs[0]
+
+public defn to-tuple?<?T> (x: ?T|False) -> []|[T] :
+  [] when x is False else [x as T]
+
+; Inverse of to-tuple?
+public defn to-element?<?T> (xs: Tuple<?T>) -> T|False :
+  ensure-single!(xs) when not empty?(xs)
+
+public defn times<?T, ?S, ?V> (f: (S) -> ?V, g: (?T) -> ?S) -> ((T) -> V) :
+  fn (x) : f(g(x))
+
+; Returns the values duplicated in the input
+public defn get-duplicates<?T> (xs: Tuple<?T&Hashable&Equalable>) -> Tuple<T> :
+  val group-by-themselves = group-by({_}, xs)
+  to-tuple $ seq{key, _}
+           $ filter({length(value(_)) >= 2}, group-by-themselves)
