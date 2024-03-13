@@ -1,0 +1,10 @@
+
+#use-added-syntax(tests)
+defpackage lang-utils/tests :
+  import core
+
+  import lang-utils
+
+deftest test-hexint :
+  val i = hexint('A')
+  #EXPECT(i == 10)

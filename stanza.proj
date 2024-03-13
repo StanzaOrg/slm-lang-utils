@@ -1,6 +1,7 @@
 include? ".slm/stanza.proj"
 pkg-cache: ".slm/pkg-cache"
-packages * defined-in "src/"
+package lang-utils defined-in "src/lang-utils.stanza"
+packages lang-utils/* defined-in "src/lang-utils"
 
 build main :
   inputs:
