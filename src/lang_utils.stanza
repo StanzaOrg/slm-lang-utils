@@ -1,7 +1,7 @@
-defpackage lang-utils :
+defpackage lang_utils :
   import core
   import collections
-  import utils/file-system
+  import file_system_utils
   import core/parsed-path
 
 ;============================================================

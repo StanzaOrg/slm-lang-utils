@@ -1,1 +1,1 @@
-slm_utils_file_system_static={locator="StanzaOrg/slm_utils_file_system",version="0.0.1",hash="4ecb3d4cb5fab3de2a9cf09b56dc5e8dc5b4a292"}
+file_system_utils_static={locator="StanzaOrg/slm_file_system_utils",version="0.0.1",hash="d4fdca3570aa61c2b23411d2a24e51974476e13b"}

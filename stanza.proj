@@ -1,16 +1,18 @@
 include? ".slm/stanza.proj"
 pkg-cache: ".slm/pkg-cache"
-package lang-utils defined-in "src/lang-utils.stanza"
-packages lang-utils/* defined-in "src/lang-utils"
+
+package lang_utils defined-in "src/lang_utils.stanza"
+packages lang_utils/* defined-in "src/lang_utils"
 
 build main :
   inputs:
-    lang-utils
+    lang_utils
   pkg: ".slm/pkgs"
+  ;o: "main"
 
-build-test lang-utils-tests :
+build-test lang_utils_tests :
   inputs:
-    lang-utils/tests
+    lang_utils/tests
   pkg: ".slm/test-pkgs"
-  o: "lang-utils-tests"
+  o: "lang_utils_tests"
 
