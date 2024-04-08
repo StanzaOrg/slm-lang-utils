@@ -1,9 +1,9 @@
 
 #use-added-syntax(tests)
-defpackage lang_utils/tests :
+defpackage lang-utils/tests :
   import core
 
-  import lang_utils
+  import lang-utils
 
 deftest test-hexint :
   val i = hexint('A')
