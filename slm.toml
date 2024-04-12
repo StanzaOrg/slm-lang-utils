@@ -1,6 +1,13 @@
 
-name = "lang-utils-static"
+name = "lang-utils"
 version = "0.0.7"
 
 [dependencies]
-utils-file-system-static = { git = "StanzaOrg/slm-utils-file-system", version = "0.0.8" }
+
+[dependencies.utils-file-system]
+pkg="utils-file-system"
+version="0.1.4"
+type="conan"
+options.shared = "True"
+options.linux.fPIC = "True"
+options.macos.fPIC = "True"
