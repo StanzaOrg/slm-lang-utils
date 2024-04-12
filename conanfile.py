@@ -23,7 +23,8 @@ class ConanSlmPackage(ConanFile):
   python_requires = "lbstanzagenerator_pyreq/[>=0.1]"
 
   # Binary configuration
-  settings = "os", "arch", "compiler", "build_type"
+  #settings = "os", "arch", "compiler", "build_type"
+  settings = "os", "arch"
 
   options = {"shared": [True, False], "fPIC": [True, False]}
   default_options = {"shared": True, "fPIC": True}
@@ -33,7 +34,7 @@ class ConanSlmPackage(ConanFile):
   # set_name(): Dynamically define the name of a package
   def set_name(self):
     self.output.info("conanfile.py: set_name()")
-    with open("slm.toml", "rb") as f:
+    with open(f"{self.recipe_folder}/slm.toml", "rb") as f:
         self.name = tomllib.load(f)["name"]
     self.output.info(f"conanfile.py: set_name() - self.name={self.name} from slm.toml")
 
@@ -41,10 +42,15 @@ class ConanSlmPackage(ConanFile):
   # set_version(): Dynamically define the version of a package.
   def set_version(self):
     self.output.info("conanfile.py: set_version()")
-    with open("slm.toml", "rb") as f:
+    with open(f"{self.recipe_folder}/slm.toml", "rb") as f:
         self.version = tomllib.load(f)["version"]
     self.output.info(f"conanfile.py: set_version() - self.version={self.version} from slm.toml")
 
+  # export(): Copies files that are part of the recipe
+  def export(self):
+    self.output.info("conanfile.py: export()")
+    # export slm.toml with the conan recipe so that it can be referenced at dependency time without sources
+    copy(self, "slm.toml", self.recipe_folder, self.export_folder)
 
   # export_sources(): Copies files that are part of the recipe sources
   def export_sources(self):
@@ -64,7 +70,7 @@ class ConanSlmPackage(ConanFile):
   def configure(self):
     self.output.info("conanfile.py: configure()")
 
-    with open("slm.toml", "rb") as f:
+    with open(f"{self.recipe_folder}/slm.toml", "rb") as f:
       deps = tomllib.load(f)["dependencies"]
 
       # for each dependency in slm.toml
@@ -85,7 +91,7 @@ class ConanSlmPackage(ConanFile):
   def requirements(self):
     self.output.info("conanfile.py: requirements()")
 
-    with open("slm.toml", "rb") as f:
+    with open(f"{self.recipe_folder}/slm.toml", "rb") as f:
       deps = tomllib.load(f)["dependencies"]
 
       # for each dependency in slm.toml
