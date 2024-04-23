@@ -146,9 +146,13 @@ class ConanSlmPackage(ConanFile):
       t="test"
       self.run(f"stanza clean", cwd=self.source_folder, scope="build")
       self.run(f"stanza build {t} -o {d}/{t} -verbose", cwd=self.source_folder, scope="build")
+      update_path_cmd=""
       if platform.system()=="Windows":
         t="test.exe"
-      self.run(f"bash -c 'export PATH=$PWD:$PATH ; {d}/{t}'", cwd=self.source_folder, scope="build")
+        # on windows, find all dlls in the current directory recursively, and add their directories to the PATH so that the dlls can be loacated at runtime
+        update_path_cmd="/usr/bin/find $PWD -name \*.dll -exec dirname \"{}\" \; | /usr/bin/sort -u | xargs -d \"\n\" -I {} export PATH={}:$PATH ; "
+      self.run(f"bash -c '{update_path_cmd} {d}/{t}'",
+               cwd=self.source_folder, scope="build")
 
 
   # package(): Copies files from build folder to the package folder.
