@@ -151,7 +151,7 @@ class ConanSlmPackage(ConanFile):
         t="test.exe"
         # on windows, find all dlls in the current directory recursively, and add their directories to the PATH so that the dlls can be loacated at runtime
         # note: the carat before the pipe symbol ^| is an escape character for cmd.exe, which will have to parse this string
-        update_path_cmd="/usr/bin/find $PWD -name \*.dll -exec dirname \"{}\" \; ^| /usr/bin/sort -u ^| xargs -d \"\n\" -I {} export PATH={}:$PATH ; "
+        update_path_cmd="/usr/bin/find $PWD -name \*.dll -exec dirname {} \; ^| /usr/bin/sort -u ^| xargs -d \n -I {} export PATH={}:$PATH ; "
       self.run(f"bash -c '{update_path_cmd} {d}/{t}'",
                cwd=self.source_folder, scope="build")
 
