@@ -6,7 +6,7 @@ version = "0.1.5"
 
 [dependencies.utils-file-system]
 pkg="utils-file-system"
-version="0.1.8"
+version="0.1.9"
 type="conan"
 options.shared = "True"
 options.linux.fPIC = "True"
