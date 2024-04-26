@@ -63,6 +63,8 @@ class ConanSlmPackage(ConanFile):
     for f in Path(".").glob("template-stanza-*.proj"):
         copy2(os.path.join(self.recipe_folder, f), self.export_sources_folder)
     copy2(os.path.join(self.recipe_folder, "stanza.proj"), self.export_sources_folder)
+    for f in Path(".").glob("stanza-library.proj"):
+        copy2(os.path.join(self.recipe_folder, f), self.export_sources_folder)
     copytree(os.path.join(self.recipe_folder, "src"), os.path.join(self.export_sources_folder, "src"))
 
 
@@ -72,6 +74,10 @@ class ConanSlmPackage(ConanFile):
 
     with open(f"{self.recipe_folder}/slm.toml", "rb") as f:
       deps = tomllib.load(f)["dependencies"]
+      # get current platform
+      psys = platform.system().lower()
+      if psys=="darwin":
+        psys = "macos"
 
       # for each dependency in slm.toml
       for k, d in deps.items():
@@ -84,7 +90,14 @@ class ConanSlmPackage(ConanFile):
             opts = d["options"]
             for k, v in opts.items():
               self.output.trace(f"conanfile.py: configure() options[\"{pkgname}\"].{k}={v}")
-              self.options[pkgname]._set(k,v)
+              # check for platform-specific options
+              if k in ["linux", "macos", "windows"]:
+                # only apply our platform, skip others
+                if k==psys:
+                  for k2, v2 in v.items():
+                    self.options[pkgname]._set(k2,v2)
+              else:
+                self.options[pkgname]._set(k,v)
 
 
   # requirements(): Define the dependencies of the package
