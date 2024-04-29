@@ -161,7 +161,6 @@ class ConanSlmPackage(ConanFile):
       self.run(f"stanza build {t} -o {d}/{t} -verbose", cwd=self.source_folder, scope="build")
       update_path_cmd=""
       if platform.system()=="Darwin":
-        t="test.exe"
         # on macos, find all dlls in the current directory recursively, and add their directories to the DYLD_LIBRARY_PATH so that the dlls can be located at runtime
         # get a unique set of directories that contain dlls under the current directory
         dylib_dirs = {p.resolve().parents[0].as_posix() for p in sorted(Path('.').glob('**/*.dylib'))}
