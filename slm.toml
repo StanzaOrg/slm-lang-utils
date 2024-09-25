@@ -1,6 +1,6 @@
 
 name = "lang-utils-static"
-version = "0.0.14"
+version = "0.0.15"
 
 [dependencies]
 utils-file-system-static = { git = "StanzaOrg/slm-utils-file-system", version = "0.0.14" }
