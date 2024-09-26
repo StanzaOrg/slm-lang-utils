@@ -1,12 +1,12 @@
 
 name = "lang-utils"
-version = "0.1.15"
+version = "0.1.16"
 
 [dependencies]
 
 [dependencies.utils-file-system]
 pkg="utils-file-system"
-version="0.1.14"
+version="0.1.16"
 type="conan"
 options.shared = "True"
 options.linux.fPIC = "True"
