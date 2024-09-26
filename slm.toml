@@ -1,5 +1,5 @@
 
-name = "lang-utils-static"
+name = "lang-utils"
 version = "0.0.16"
 
 [dependencies]
