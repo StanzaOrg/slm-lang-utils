@@ -4,7 +4,7 @@ version = "0.0.16"
 
 [dependencies]
 
-[dependencies.utils-file-system-static]
+[dependencies.utils-file-system]
 pkg="utils-file-system"
 version="0.0.16"
 type="conan"
